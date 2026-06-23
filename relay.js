@@ -15,9 +15,9 @@ function checkKey(req, res) {
 
 app.post("/announce", (req, res) => {
   if (!checkKey(req, res)) return;
-  const { message, type, author } = req.body;
+  const { message, type, author, robloxUsername } = req.body;
   if (!message) return res.status(400).json({ error: "message required" });
-  queue.push({ message, type: type ?? "general", author: author ?? "Discord" });
+  queue.push({ message, type: type ?? "general", author: author ?? "Discord", robloxUsername: robloxUsername ?? "" });
   res.json({ ok: true });
 });
 
