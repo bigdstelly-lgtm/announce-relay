@@ -5,6 +5,7 @@ app.use(express.json());
 const API_KEY = "gardentrenchesadmin52932";
 const announceQueue = [];
 const alertQueue = [];
+const serverRegistry = {}; // jobId -> { players: [...], lastSeen: timestamp }
 
 function checkKey(req, res) {
   if (req.headers["x-api-key"] !== API_KEY) {
@@ -14,7 +15,36 @@ function checkKey(req, res) {
   return true;
 }
 
-// Discord bot POSTs here to queue an announcement
+// Roblox game POSTs player list + server ID every 30s
+app.post("/heartbeat", (req, res) => {
+  if (!checkKey(req, res)) return;
+  const { jobId, players } = req.body;
+  if (!jobId) return res.status(400).json({ error: "jobId required" });
+  serverRegistry[jobId] = { players: players ?? [], lastSeen: Date.now() };
+  res.json({ ok: true });
+});
+
+// Bot queries this to find which server a player is in
+app.get("/findplayer", (req, res) => {
+  if (!checkKey(req, res)) return;
+  const username = req.query.username?.toLowerCase();
+  if (!username) return res.status(400).json({ error: "username required" });
+
+  // Clean up stale servers (not seen in 2 minutes)
+  const now = Date.now();
+  for (const jobId of Object.keys(serverRegistry)) {
+    if (now - serverRegistry[jobId].lastSeen > 120000) delete serverRegistry[jobId];
+  }
+
+  for (const [jobId, data] of Object.entries(serverRegistry)) {
+    const found = data.players.find(p => p.toLowerCase() === username);
+    if (found) return res.json({ jobId, found: true });
+  }
+
+  res.json({ jobId: null, found: false });
+});
+
+// Discord bot POSTs announcements
 app.post("/announce", (req, res) => {
   if (!checkKey(req, res)) return;
   const { message, type, author, robloxUsername } = req.body;
@@ -23,14 +53,14 @@ app.post("/announce", (req, res) => {
   res.json({ ok: true });
 });
 
-// Roblox polls this for announcements
+// Roblox polls for announcements
 app.get("/poll", (req, res) => {
   if (!checkKey(req, res)) return;
   const pending = announceQueue.splice(0, announceQueue.length);
   res.json({ pending });
 });
 
-// Roblox POSTs anticheat/alt alerts here
+// Roblox POSTs anticheat/alt alerts
 app.post("/alert", (req, res) => {
   if (!checkKey(req, res)) return;
   const { alertType, userId, username, details } = req.body;
@@ -39,7 +69,7 @@ app.post("/alert", (req, res) => {
   res.json({ ok: true });
 });
 
-// Discord bot polls this for alerts
+// Bot polls for alerts
 app.get("/alerts", (req, res) => {
   if (!checkKey(req, res)) return;
   const pending = alertQueue.splice(0, alertQueue.length);
