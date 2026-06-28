@@ -5,7 +5,9 @@ app.use(express.json());
 const API_KEY = "gardentrenchesadmin52932";
 const announceQueue = [];
 const alertQueue = [];
-const serverRegistry = {}; // jobId -> { players: [...], lastSeen: timestamp }
+const serverRegistry = {};
+
+let cachedStock = { stock: {}, nextRestock: null };
 
 function checkKey(req, res) {
   if (req.headers["x-api-key"] !== API_KEY) {
@@ -29,18 +31,14 @@ app.get("/findplayer", (req, res) => {
   if (!checkKey(req, res)) return;
   const username = req.query.username?.toLowerCase();
   if (!username) return res.status(400).json({ error: "username required" });
-
-  // Clean up stale servers (not seen in 2 minutes)
   const now = Date.now();
   for (const jobId of Object.keys(serverRegistry)) {
     if (now - serverRegistry[jobId].lastSeen > 120000) delete serverRegistry[jobId];
   }
-
   for (const [jobId, data] of Object.entries(serverRegistry)) {
     const found = data.players.find(p => p.toLowerCase() === username);
     if (found) return res.json({ jobId, found: true });
   }
-
   res.json({ jobId: null, found: false });
 });
 
@@ -74,6 +72,20 @@ app.get("/alerts", (req, res) => {
   if (!checkKey(req, res)) return;
   const pending = alertQueue.splice(0, alertQueue.length);
   res.json({ pending });
+});
+
+// Roblox POSTs stock data after every restock
+app.post("/stock", (req, res) => {
+  if (!checkKey(req, res)) return;
+  const { stock, nextRestock } = req.body;
+  cachedStock = { stock, nextRestock };
+  res.json({ ok: true });
+});
+
+// Bot polls this every 30s to update the Discord embed
+app.get("/stock", (req, res) => {
+  if (!checkKey(req, res)) return;
+  res.json(cachedStock);
 });
 
 const PORT = process.env.PORT || 3000;
