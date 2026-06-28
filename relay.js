@@ -77,8 +77,8 @@ app.get("/alerts", (req, res) => {
 // Roblox POSTs stock data after every restock
 app.post("/stock", (req, res) => {
   if (!checkKey(req, res)) return;
-  const { stock, nextRestock } = req.body;
-  cachedStock = { stock, nextRestock };
+  const { stock, nextRestockAt } = req.body;
+  cachedStock = { stock, nextRestockAt };
   res.json({ ok: true });
 });
 
